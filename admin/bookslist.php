@@ -8,17 +8,50 @@
     
     <?php
         session_start();
+        if($_SESSION['admin']){
+            if($_SERVER['REQUEST_METHOD']=='POST'){
+                include '../getdata.php';
+                if(empty($_POST['bookid']) or empty($_POST['bookname'])){
+                    echo "empty field try again";
+                }else{
+                    if(addbook($_POST['bookid'],$_POST['bookname'])){
+                        $_SESSION['msg'] = "Book added Successfully";
+                    }else{
+                        $_SESSION['msg'] = "There was an error with the server please try again later";
+                    }
+                    header("Location: http://localhost:8816/admin/bookslist.php");
+                    exit;
+                }
+            }
+        }else{
+            $_SESSION['msg'] = "Login First";
+            header('Location: http://localhost:8816/adminlogin.php');
+        }
+    
     ?>
     </div>
     <div style="display: flex;flex:1;flex-direction:column;justify-content:space-between;height:100%;margin-top:10px;">
         <span style="color:white;font-size:50px;align-self:center">Menu</span>
         <a href="/admin/bookslist.php"><button class="btn btn-dark">books list</button></a>
-        <a href="/admin/addbook.php"><button class="btn btn-dark">Add Book</button></a>
         <a href="/admin/userdata.php"><button class="btn btn-dark">user data</button></a>
         <a href="/admin/adduser.php"><button class="btn btn-dark">add user</button></a>
         <a href="/admin/logout.php"><button class="btn btn-dark">logout</button></a>
     </div>
-    <div style="display: flex;flex:7;flex-direction:row;justify-content:center;padding-left:50px;padding-top:100px">
+    <div style="max-width:500px;max-height:500px;border-radius:5px;margin-right:20px;padding:50px 50px;background-color:white">
+        <h4>Add Book</h4>
+        <form action="/admin/bookslist.php" method="POST">
+            <div class="form-group">
+                <label for="bookid">Book ID</label>
+                <input class= "form-control" type="number" name="bookid" value="" id="bookid">
+            </div>
+            <div class="form-group">
+                <label for="bookname">Book Name</label>
+                <input type="text" class= "form-control" name="bookname" value="" id="bookname">
+            </div>
+            <button type="submit" class="btn btn-primary">Add Book</button>
+        </form>
+    </div>
+    <div style="display: flex;flex:7;padding-left:50px;padding-top:100px">
         <?php 
             include "../getdata.php";
             if($_SESSION['admin']){

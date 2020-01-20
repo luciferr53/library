@@ -36,14 +36,13 @@
         $stm = $pdo->prepare("SELECT * FROM books");
         $stm->execute();
         $data = $stm->fetchAll();
-       
-        $htmlfortable = "<table class='table table-dark table-bordered;margin-right:50px'><tr><th>ID</th><th>Name</th><th>Action</th></tr><tr>";
-        foreach($data as $row){            
-            $htmlfortable = $htmlfortable."<td>".$row['id']."</td><td>".$row['name']."</td><td><a href='/admin/deletebook.php?bookid=".$row['id']."'><button class='btn btn-danger'>delete</button></a></td></tr>";
-            
+        $htmlfortable = "<table class='table table-dark table-bordered;margin-right:50px'><tr><th>ID</th><th>Name</th><th>Last Issuers</th><th>Action</th></tr><tr>";
+        foreach($data as $row){  
+            $lastusers = getlastissues($row['id'],$pdo);         
+            $htmlfortable = $htmlfortable."<td>".$row['id']."</td><td>".$row['name']."</td><td>".$lastusers."</td><td><a href='/admin/deletebook.php?bookid=".$row['id']."'><button class='btn btn-danger'>delete</button></a></td></tr>";  
         }
-        
-        return $htmlfortable;
+        $htmlfortable."</table>";
+        echo $htmlfortable;
     }
     
     function renderissuelist(){
@@ -54,13 +53,22 @@
         $data = $stm->fetchAll();
         $htmlfortable = "<table class='table table-dark table-bordered;margin-right:50px'><tr><th>UserName</th><th>BookName</th><th>Date Of Issue</th></tr><tr>";
         foreach($data as $row){            
-            $htmlfortable = $htmlfortable."<td>".$row['username']."</td><td>".$row['bookname']."</td><td>".$row['doi']."</td></tr>";
-            
+            $htmlfortable = $htmlfortable."<td>".$row['username']."</td><td>".$row['bookname']."</td><td>".$row['doi']."</td></tr>";   
         }
         $htmlfortable = $htmlfortable."</table>";
         return $htmlfortable;
     }
-
+    function getlastissues($bookid,$pdo){
+        
+        $stm = $pdo->prepare("SELECT users.username FROM issuedbooks INNER JOIN users ON users.id = issuedbooks.userid AND issuedbooks.bookid = $bookid ORDER BY issuedbooks.doi DESC LIMIT 3");
+        $stm->execute();
+        $data = $stm->fetchAll();
+        $lastusers = "";
+        foreach($data as $row){
+            $lastusers = $lastusers.$row['username'].",";
+        }
+        return $lastusers;
+    }
     function addbook($bookid,$bookname){
         include "connecttodb.php";
         $pdo = connecttodb();
@@ -77,8 +85,6 @@
         include "connecttodb.php";
         $pdo = connecttodb();
         $date = new DateTime();
-        $timestamp = $date->getTimestamp();
-
         try{
             $stm = $pdo->prepare("INSERT INTO issuedbooks VALUES(null,$userid,$bookid,CURRENT_TIMESTAMP)");
             $stm->execute();
@@ -116,4 +122,4 @@
             return false;
         }
     }
-?>
+?>    
