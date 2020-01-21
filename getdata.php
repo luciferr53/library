@@ -1,13 +1,11 @@
 <?php
     function renderuserbookslist(){
         include 'connecttodb.php';
-        $pdo = connecttodb();
-        $stm = $pdo->prepare("SELECT * FROM books");
-        $stm->execute();
-        $data = $stm->fetchAll();
+        $redis = connecttoredis();
+        $data = $redis->hgetall('books');
         $htmlfortable = "<table class='table table-dark table-bordered;margin-right:50px;' ><tr><th>ID</th><th>NAME</th><th>Action</th></tr><tr>";
-        foreach($data as $book){
-            $htmlfortable = $htmlfortable."<td>".$book['id']."</td><td>".$book['name']."</td><td><a href='/issue.php?bookid=".$book['id']."'><button class='btn btn-primary'>issue</button></a></td></tr>";
+        foreach($data as $bookid => $bookname){
+            $htmlfortable = $htmlfortable."<td>".$bookid."</td><td>".$bookname."</td><td><a href='/issue.php?bookid=".$bookid."'><button class='btn btn-primary'>issue</button></a></td></tr>";
         }
         $htmlfortable = $htmlfortable."</table>";
         return $htmlfortable;
@@ -15,31 +13,25 @@
 
     function renderissuedbooks($userid){
         include 'connecttodb.php';
-        $pdo = connecttodb();
-        $stm = $pdo->prepare("SELECT issuedbooks.doi,books.name FROM issuedbooks INNER JOIN books ON books.id=issuedbooks.bookid AND issuedbooks.userid='$userid'");
-        $stm->execute();
-        $data = $stm->fetchAll();
-       
+        $redis = connecttoredis();
+        $data = $redis->hgetall("user:".$userid.":books");
         $htmlfortable = "<table class='table table-dark table-bordered;margin-right:50px'><tr><th>Book Name</th><th>Date Of Issue</th></tr><tr>";
-        foreach($data as $row){
-            
-            $htmlfortable = $htmlfortable."<td>".$row['name']."</td><td>".$row['doi']."</td></tr>";
-            
-        }
-        
-        return $htmlfortable;
+        foreach($data as $bookid=>$timestamp){
+            $bookname = $redis->hget('books',$bookid);
+            $htmlfortable = $htmlfortable."<td>".$bookname."</td><td>".$timestamp."</td></tr>";           
+        }  
+        return $htmlfortable."</table>";
     }
 
     function renderbookslist(){
         include 'connecttodb.php';
         $pdo = connecttodb();
-        $stm = $pdo->prepare("SELECT * FROM books");
-        $stm->execute();
-        $data = $stm->fetchAll();
+        $redis = connecttoredis();
+        $data = $redis->hgetall('books');
         $htmlfortable = "<table class='table table-dark table-bordered;margin-right:50px'><tr><th>ID</th><th>Name</th><th>Last Issuers</th><th>Action</th></tr><tr>";
-        foreach($data as $row){  
-            $lastusers = getlastissues($row['id'],$pdo);         
-            $htmlfortable = $htmlfortable."<td>".$row['id']."</td><td>".$row['name']."</td><td>".$lastusers."</td><td><a href='/admin/deletebook.php?bookid=".$row['id']."'><button class='btn btn-danger'>delete</button></a></td></tr>";  
+        foreach($data as $bookid => $bookname){  
+            $lastusers = getlastissues($bookid,$pdo);         
+            $htmlfortable = $htmlfortable."<td>".$bookid."</td><td>".$bookname."</td><td>".$lastusers."</td><td><a href='/admin/deletebook.php?bookid=".$bookid."'><button class='btn btn-danger'>delete</button></a></td></tr>";  
         }
         $htmlfortable."</table>";
         echo $htmlfortable;
@@ -47,13 +39,17 @@
     
     function renderissuelist(){
         include 'connecttodb.php';
-        $pdo = connecttodb();
-        $stm = $pdo->prepare("SELECT users.username AS username,books.name AS bookname,issuedbooks.doi FROM issuedbooks INNER JOIN users ON issuedbooks.userid=users.id INNER JOIN books ON issuedbooks.bookid=books.id");
-        $stm->execute();
-        $data = $stm->fetchAll();
+        $redis = connecttoredis();
+        $keys = $redis->keys('user:*:books');
         $htmlfortable = "<table class='table table-dark table-bordered;margin-right:50px'><tr><th>UserName</th><th>BookName</th><th>Date Of Issue</th></tr><tr>";
-        foreach($data as $row){            
-            $htmlfortable = $htmlfortable."<td>".$row['username']."</td><td>".$row['bookname']."</td><td>".$row['doi']."</td></tr>";   
+        foreach($keys as $key){
+            $id = explode(':',$key)[1];
+            $data = $redis->hgetall($key);
+            foreach($data as $bookid=>$timestamp){
+                $username = $redis->hget("user:".$id,"username");
+                $bookname = $redis->hget("books",$bookid);
+                $htmlfortable = $htmlfortable."<td>".$username."</td><td>".$bookname."</td><td>".$timestamp."</td></tr>";   
+            }
         }
         $htmlfortable = $htmlfortable."</table>";
         return $htmlfortable;
@@ -71,10 +67,12 @@
     }
     function addbook($bookid,$bookname){
         include "connecttodb.php";
+        include 'updateredis.php';
         $pdo = connecttodb();
         try{
         $stm = $pdo->prepare("INSERT INTO books VALUES($bookid,'$bookname')");
         $stm->execute();
+        updateall($pdo);
         return true;
         }catch(PDOException $e){
             return false;
@@ -83,11 +81,12 @@
 
     function issue($bookid,$userid){
         include "connecttodb.php";
+        include 'updateredis.php';
         $pdo = connecttodb();
-        $date = new DateTime();
         try{
             $stm = $pdo->prepare("INSERT INTO issuedbooks VALUES(null,$userid,$bookid,CURRENT_TIMESTAMP)");
             $stm->execute();
+            updateall($pdo);
             return true;
         }catch(PDOException $e){
             return false;
@@ -95,11 +94,12 @@
     }
     function deletebook($bookid){
         include "connecttodb.php";
+        include 'updateredis.php';
         try{
             $pdo = connecttodb();
             $stm= $pdo->prepare("DELETE FROM books WHERE id=$bookid");
             $stm->execute();
-            echo "success";
+            updateall($pdo);
             return true;
         }catch(PDOException $e){
             echo "failed";
@@ -110,16 +110,18 @@
     }
     function adduser($username,$password){
         include 'connecttodb.php';
+        include 'updateredis.php';
         try{
             $pdo = connecttodb();
             $id = random_int(101,99999);
             $stm = $pdo->prepare("INSERT INTO users VALUES($id,'$username','$password')");
             $stm->execute();
-            echo "success";
+            updateall($pdo);
             return true;
         }catch(PDOException $e){
             echo "failed";
             return false;
         }
     }
+
 ?>    

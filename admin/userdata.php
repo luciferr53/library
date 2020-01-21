@@ -17,7 +17,6 @@
                     exit;
                 }else{
                     if(adduser($_POST['username'],$_POST['password'])){
-                        echo "success";
                         $_SESSION['msg'] = "USER Successfull Added";
                         header('Location: http://localhost:8816/admin/bookslist.php');
                         exit;
@@ -39,7 +38,6 @@
         <span style="color:white;font-size:50px;align-self:center">Menu</span>
         <a href="/admin/bookslist.php"><button class="btn btn-dark">books list</button></a>
         <a href="/admin/userdata.php"><button class="btn btn-dark">user data</button></a>
-        <a href="/admin/adduser.php"><button class="btn btn-dark">add user</button></a>
         <a href="/admin/logout.php"><button class="btn btn-dark">logout</button></a>
     </div>
     <div style="margin-left:50px;max-width:500px;max-height:500px;border-radius:5px;margin-top:50px;padding:50px 50px;background-color:white">
